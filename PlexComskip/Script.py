@@ -17,7 +17,7 @@ if not os.path.exists(config_file_path):
   print 'Make a copy of PlexConfig.conf.example named PlexConfig.conf, modify as necessary, and place in the same directory as this script.'
   sys.exit(1)
 
-config = ConfigParser.SafeConfigParser({'comskip-ini-path' : os.path.join(os.path.dirname(os.path.realpath(__file__)), 'comskip.ini'), 'temp-root' : tempfile.gettempdir(), 'nice-level' : '0'})
+config = ConfigParser.SafeConfigParser({'comskip-ini-path' : os.path.join(os.path.dirname(os.path.realpath(__file__)), 'Comskip.ini'), 'temp-root' : tempfile.gettempdir(), 'nice-level' : '0'})
 config.read(config_file_path)
 
 COMSKIP_PATH = os.path.expandvars(os.path.expanduser(config.get('Helper Apps', 'comskip-path')))
@@ -113,7 +113,7 @@ except Exception, e:
   sys.exit(0)
 
 try:
-  if COPY_ORIGINAL or SAVE_ALWAYS: 
+  if COPY_ORIGINAL or SAVE_ALWAYS:
     temp_video_path = os.path.join(temp_dir, video_basename)
     logging.info('Copying file to work on it: %s' % temp_video_path)
     shutil.copy(video_path, temp_dir)
@@ -136,7 +136,7 @@ try:
   prev_segment_end = 0.0
   if os.path.exists(edl_file):
     with open(edl_file, 'rb') as edl:
-      
+
       # EDL contains segments we need to drop, so chain those together into segments to keep.
       for segment in edl:
         start, end, something = segment.split()
@@ -172,7 +172,7 @@ try:
       except Exception, e:
         logging.error('Exception running ffmpeg: %s' % e)
         cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
-      
+
       # If the last drop segment ended at the end of the file, we will have written a zero-duration file.
       if os.path.exists(segment_file_name):
         if os.path.getsize(segment_file_name) < 1000:

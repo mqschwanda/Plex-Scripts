@@ -1,10 +1,10 @@
 [Helper Apps]
 
 # Path to the comskip binary.
-comskip-path: /Users/username/Applications/Comskip/comskip
+comskip-path: /path/to/Comskip/comskip
 
 # Path to the comskip INI file. Defaults to the same directory as the PlexComskip script.
-# comskip-ini-path: ~/comskip.ini
+# comskip-ini-path: ~/Comskip.ini
 
 # Path to the ffmpeg binary... to find path run shell script: `brew info ffmpeg` and add '/bin/ffmpeg' to end of installation path
 ffmpeg-path: /usr/local/Cellar/ffmpeg/3.3.1/bin/ffmpeg
