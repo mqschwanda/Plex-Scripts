@@ -46,29 +46,32 @@ except Exception, e:
 # Compress with Handbreak.
 try:
   logging.info('Starting video compression!')
-  handbreak_output = os.path.join(original_video_dir, '.'.join(['handbreak','mp4']))
-
-  HandBreakCLI = ['HandBrakeCLI', '--input', video_path, '--output', handbreak_output, '--optimize']
+  compressed_output = os.path.join(original_video_dir, '.'.join(['handbreak','mp4']))
+  # START COPYING HERE: copy the below block of code to change software used in the compression process
+  HandBreakCLI = ['HandBrakeCLI', '--input', video_path, '--output', compressed_output, '--optimize']
   video_format = ['--format', 'mp4', '--encoder', 'x264', '--quality', '20.0', '--maxWidth', '1920', '--maxHeight', '1080', '--rate', '30']
   audio_format = ['--aencoder', 'av_aac', '--ab', '128', '--mixdown', 'stereo']
   cmd = HandBreakCLI + video_format + audio_format
   logging.info('[HandBreakCLI] Command: %s' % cmd)
+  # END COPYING HERE
   subprocess.call(cmd)
-  logging.info('Done compressing!')
+  logging.info('HandBrakeCLI finished!')
 except Exception, e:
-  logging.error('Problem compressing file: %s' % video_path)
+  logging.error('Problem compressing file with HandBrake: %s' % video_path)
   logging.error(str(e))
 # Compress with FFMPEG.
 try:
   logging.info('Starting video compression!')
-  ffmpeg_output = os.path.join(original_video_dir, '.'.join(['ffmpeg','mp4']))
-  FFMPEG_ARGS = [FFMPEG_PATH, '-y', '-i', video_path, ffmpeg_output]
+  compressed_output = os.path.join(original_video_dir, '.'.join(['ffmpeg','mp4']))
+  # START COPYING HERE: copy the below block of code to change software used in the compression process
+  FFMPEG = [FFMPEG_PATH, '-y', '-i', video_path, compressed_output]
   video_format = ['-vcodec', 'h264', '-r', '30', '-crf', '20', '-vf', "scale=min'(1920,iw)':-2", '-movflags', 'faststart']
   audio_format = ['-acodec', 'aac','-ab','128k']
-  cmd = FFMPEG_ARGS + video_format + audio_format
-  logging.info('[ffmpeg] Command: %s' % cmd)
+  cmd = FFMPEG + video_format + audio_format
+  logging.info('[FFMPEG] Command: %s' % cmd)
+  # END COPYING HERE
   subprocess.call(cmd)
-  logging.info('Done compressing!')
+  logging.info('FFMPEG finished!')
 except Exception, e:
-  logging.error('Problem compressing file: %s' % ffmpeg_input)
+  logging.error('Problem compressing file with FFMPEG: %s' % video_path)
   logging.error(str(e))

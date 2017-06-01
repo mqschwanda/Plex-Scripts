@@ -58,22 +58,22 @@ if len(sys.argv) < 2:
   sys.exit(1)
 
 # Compress with FFMPEG.
-def compress_video(ffmpeg_input):
+def compress_video():
   try:
     logging.info('Starting video compression!')
-    ffmpeg_output = os.path.join(original_video_dir, '.'.join([video_name,'mp4']))
-    FFMPEG_ARGS = [FFMPEG_PATH, '-y', '-i', ffmpeg_input, '-preset', 'slow', ffmpeg_output]
+    compressed_output = os.path.join(original_video_dir, '.'.join([video_name,'mp4']))
+    FFMPEG = [FFMPEG_PATH, '-y', '-i', video_path, compressed_output]
     video_format = ['-vcodec', 'h264', '-r', '30', '-crf', '20', '-vf', "scale=min'(1920,iw)':-2", '-movflags', 'faststart']
     audio_format = ['-acodec', 'aac','-ab','128k']
-    cmd = NICE_ARGS + FFMPEG_ARGS + video_format + audio_format
-    logging.info('[ffmpeg] Command: %s' % cmd)
+    cmd = NICE_ARGS + FFMPEG + video_format + audio_format
+    logging.info('[FFMPEG] Command: %s' % cmd)
     subprocess.call(cmd)
     logging.info('Done compressing!')
     try:
-      if os.path.exists(video_path) and os.path.exists(ffmpeg_output):
+      if os.path.exists(video_path) and os.path.exists(compressed_output):
         logging.info('Removing original file...')
         os.remove(video_path)
-      elif os.path.exists(ffmpeg_output):
+    elif os.path.exists(compressed_output):
         logging.info('Could only find processed file... original file is already deleted.')
       elif os.path.exists(video_path):
         logging.info('Could only find original file... will not delete orignal.')
@@ -85,7 +85,7 @@ def compress_video(ffmpeg_input):
       cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
 
   except Exception, e:
-    logging.error('Problem compressing file: %s' % ffmpeg_input)
+    logging.error('Problem compressing file: %s' % video_path)
     logging.error(str(e))
 
 # Clean up after ourselves and exit.
