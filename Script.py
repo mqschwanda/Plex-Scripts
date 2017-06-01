@@ -9,17 +9,24 @@ import sys
 import tempfile
 import time
 import uuid
-
+###
+# Exit on wrong format of startup code
+if len(sys.argv) < 2:
+  print "Usage: python '{0}' <path_to_file>".format(os.path.realpath(__file__))
+  sys.exit(1)
+###
 # Configure process from file
 config_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.conf')
-if not os.path.exists(config_file_path): # check for config file and exit process if ti does not exist
-  print 'Config file not found: %s' % config_file_path
+if not os.path.exists(config_file_path): # check for config file and exit process if it does not exist
+  print "Config file not found: '{0}'".format(config_file_path)
   print 'Make a copy of config.conf.example named config.conf, modify as necessary, and place in the same directory as this script.'
   sys.exit(1)
-
+###
+# Handle config file parse
 config = ConfigParser.SafeConfigParser({'comskip-ini-path' : os.path.join(os.path.dirname(os.path.realpath(__file__)), 'comskip.ini'), 'temp-root' : tempfile.gettempdir(), 'nice-level' : '0'})
 config.read(config_file_path) # read the file into configuration
-
+###
+# Bring in global variables from os and config
 COMSKIP_PATH = os.path.expandvars(os.path.expanduser(config.get('Helper Apps', 'comskip-path')))
 COMSKIP_INI_PATH = os.path.expandvars(os.path.expanduser(config.get('Helper Apps', 'comskip-ini-path')))
 FFMPEG_PATH = os.path.expandvars(os.path.expanduser(config.get('Helper Apps', 'ffmpeg-path')))
@@ -30,10 +37,10 @@ COPY_ORIGINAL = config.getboolean('File Manipulation', 'copy-original')
 SAVE_ALWAYS = config.getboolean('File Manipulation', 'save-always')
 SAVE_FORENSICS = config.getboolean('File Manipulation', 'save-forensics')
 NICE_LEVEL = config.get('Helper Apps', 'nice-level')
-
-# Logging.
+###
+# Handle Logging
 session_uuid = str(uuid.uuid4())
-fmt = '%%(asctime)-15s [%s] %%(message)s' % session_uuid[:6]
+fmt = "%%(asctime)-15s ['{0}'] %%(message)s".format(session_uuid[:6])
 if not os.path.exists(os.path.dirname(LOG_FILE_PATH)):
   os.makedirs(os.path.dirname(LOG_FILE_PATH))
 logging.basicConfig(level=logging.INFO, format=fmt, filename=LOG_FILE_PATH)
@@ -43,39 +50,34 @@ if CONSOLE_LOGGING:
   formatter = logging.Formatter('%(message)s')
   console.setFormatter(formatter)
   logging.getLogger('').addHandler(console)
-
-# Human-readable bytes.
+###
+# Human-readable bytes conversion
 def sizeof_fmt(num, suffix='B'):
-
   for unit in ['','K','M','G','T','P','E','Z']:
     if abs(num) < 1024.0:
       return "%3.1f%s%s" % (num, unit, suffix)
     num /= 1024.0
   return "%.1f%s%s" % (num, 'Y', suffix)
-
-if len(sys.argv) < 2:
-  print 'Usage: PlexScript.py input-file.mkv'
-  sys.exit(1)
-
+###
 # Compress with FFMPEG.
-def compress_video():
+def compress_video(compress_video_path):
   try:
     logging.info('Starting video compression!')
     compressed_output = os.path.join(original_video_dir, '.'.join([video_name,'mp4']))
-    FFMPEG = [FFMPEG_PATH, '-y', '-i', video_path, compressed_output]
+    FFMPEG = [FFMPEG_PATH, '-y', '-i', compress_video_path, compressed_output]
     video_format = ['-vcodec', 'h264', '-r', '30', '-crf', '20', '-vf', "scale=min'(1920,iw)':-2", '-movflags', 'faststart']
     audio_format = ['-acodec', 'aac','-ab','128k']
     cmd = NICE_ARGS + FFMPEG + video_format + audio_format
-    logging.info('[FFMPEG] Command: %s' % cmd)
+    logging.info("[FFMPEG] Command: '{0}'".format(cmd))
     subprocess.call(cmd)
     logging.info('Done compressing!')
     try:
-      if os.path.exists(video_path) and os.path.exists(compressed_output):
+      if os.path.exists(compress_video_path) and os.path.exists(compressed_output):
         logging.info('Removing original file...')
-        os.remove(video_path)
-    elif os.path.exists(compressed_output):
+        os.remove(compress_video_path)
+      elif os.path.exists(compressed_output):
         logging.info('Could only find processed file... original file is already deleted.')
-      elif os.path.exists(video_path):
+      elif os.path.exists(compress_video_path):
         logging.info('Could only find original file... will not delete orignal.')
       else:
         logging.info('Could not find any files...')
@@ -85,7 +87,7 @@ def compress_video():
       cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
 
   except Exception, e:
-    logging.error('Problem compressing file: %s' % video_path)
+    logging.error('Problem compressing file: %s' % compress_video_path)
     logging.error(str(e))
 
 # Clean up after ourselves and exit.
@@ -109,10 +111,11 @@ def check_comskip_output():
   try:
     input_size = os.path.getsize(video_path)
     output_size = os.path.getsize(os.path.join(temp_dir, video_basename))
-    if input_size and 1.01 > float(output_size) / float(input_size) > 0.99:
+    if input_size and 1.01 > float(output_size) / float(input_size) > 0.99: # file size is between 99% and 101% of original
       logging.info('No comercials were found, the original file will not be replaced')
+      compress_video(video_path) # Compress with FFMPEG.
       cleanup_and_exit(temp_dir, SAVE_ALWAYS)
-    elif input_size and 1.1 > float(output_size) / float(input_size) > 0.5:
+    elif input_size and 1 > float(output_size) / float(input_size) > 0.5: # file size is between 50% and 100% of original
       size_change = sizeof_fmt(input_size - output_size)
       percent_change = int(output_size / input_size)
       logging.info("Comercials were found, the original file has been reduced by '{0}' ('{1}'%)".format(size_change, percent_change))
