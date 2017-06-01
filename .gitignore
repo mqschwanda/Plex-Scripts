@@ -89,4 +89,4 @@ ENV/
 .ropeproject
 
 # User config
-PlexComskip.conf
+config.conf
