@@ -33,6 +33,6 @@ brew install handbrake
 ```
 2. Test Handbrake using the `ffmpeg-vs-handbreak.py` file and manually compare the results.
 ```shell
-python <path_to_repo>/Plex-Scripts/ffmpeg-vs-handbreak.py> <path_to_video>
+python <path_to_repo>/Plex-Scripts/ffmpeg-vs-handbreak.py <path_to_video>
 ```
 3. Swap out relevant code between `script.py` and `ffmpeg-vs-handbreak.py` based on your compression preference
