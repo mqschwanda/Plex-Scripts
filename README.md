@@ -6,7 +6,7 @@ First install Xcode (free from Mac OS X App Store). After it's installed, instal
 
 The easiest way to install Comskip's dependencies is via Homebrew (http://brew.sh/):
 ```shell
-brew install autoconf automake libtool pkgconfig argtable ffmpeg sdl
+brew install autoconf automake libtool pkgconfig argtable ffmpeg sdl rename
 ```
 
 

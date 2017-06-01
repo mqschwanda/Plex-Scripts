@@ -10,15 +10,15 @@ import tempfile
 import time
 import uuid
 
-# Config stuff.
-config_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'PlexComskip.conf')
-if not os.path.exists(config_file_path):
+# Configure process from file
+config_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.conf')
+if not os.path.exists(config_file_path): # check for config file and exit process if ti does not exist
   print 'Config file not found: %s' % config_file_path
-  print 'Make a copy of PlexConfig.conf.example named PlexConfig.conf, modify as necessary, and place in the same directory as this script.'
+  print 'Make a copy of config.conf.example named config.conf, modify as necessary, and place in the same directory as this script.'
   sys.exit(1)
 
-config = ConfigParser.SafeConfigParser({'comskip-ini-path' : os.path.join(os.path.dirname(os.path.realpath(__file__)), 'Comskip.ini'), 'temp-root' : tempfile.gettempdir(), 'nice-level' : '0'})
-config.read(config_file_path)
+config = ConfigParser.SafeConfigParser({'comskip-ini-path' : os.path.join(os.path.dirname(os.path.realpath(__file__)), 'comskip.ini'), 'temp-root' : tempfile.gettempdir(), 'nice-level' : '0'})
+config.read(config_file_path) # read the file into configuration
 
 COMSKIP_PATH = os.path.expandvars(os.path.expanduser(config.get('Helper Apps', 'comskip-path')))
 COMSKIP_INI_PATH = os.path.expandvars(os.path.expanduser(config.get('Helper Apps', 'comskip-ini-path')))
@@ -54,8 +54,39 @@ def sizeof_fmt(num, suffix='B'):
   return "%.1f%s%s" % (num, 'Y', suffix)
 
 if len(sys.argv) < 2:
-  print 'Usage: PlexComskip.py input-file.mkv'
+  print 'Usage: PlexScript.py input-file.mkv'
   sys.exit(1)
+
+# Compress with FFMPEG.
+def compress_video(ffmpeg_input):
+  try:
+    logging.info('Starting video compression!')
+    ffmpeg_output = os.path.join(original_video_dir, '.'.join([video_name,'mp4']))
+    FFMPEG_ARGS = [FFMPEG_PATH, '-y', '-i', ffmpeg_input, '-preset', 'slow', ffmpeg_output]
+    video_format = ['-vcodec', 'h264', '-r', '30', '-crf', '20', '-vf', "scale=min'(1920,iw)':-2", '-movflags', 'faststart']
+    audio_format = ['-acodec', 'aac','-ab','128k']
+    cmd = NICE_ARGS + FFMPEG_ARGS + video_format + audio_format
+    logging.info('[ffmpeg] Command: %s' % cmd)
+    subprocess.call(cmd)
+    logging.info('Done compressing!')
+    try:
+      if os.path.exists(video_path) and os.path.exists(ffmpeg_output):
+        logging.info('Removing original file...')
+        os.remove(video_path)
+      elif os.path.exists(ffmpeg_output):
+        logging.info('Could only find processed file... original file is already deleted.')
+      elif os.path.exists(video_path):
+        logging.info('Could only find original file... will not delete orignal.')
+      else:
+        logging.info('Could not find any files...')
+
+    except Exception, e:
+      logging.error('Something went wrong while consolidating files: %s' % e)
+      cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
+
+  except Exception, e:
+    logging.error('Problem compressing file: %s' % ffmpeg_input)
+    logging.error(str(e))
 
 # Clean up after ourselves and exit.
 def cleanup_and_exit(temp_dir, keep_temp=False):
@@ -73,8 +104,37 @@ def cleanup_and_exit(temp_dir, keep_temp=False):
   logging.info('Done processing!')
   sys.exit(0)
 
+def check_comskip_output():
+  logging.info('Analyzing ComSkip output file...')
+  try:
+    input_size = os.path.getsize(video_path)
+    output_size = os.path.getsize(os.path.join(temp_dir, video_basename))
+    if input_size and 1.01 > float(output_size) / float(input_size) > 0.99:
+      logging.info('No comercials were found, the original file will not be replaced')
+      cleanup_and_exit(temp_dir, SAVE_ALWAYS)
+    elif input_size and 1.1 > float(output_size) / float(input_size) > 0.5:
+      size_change = sizeof_fmt(input_size - output_size)
+      percent_change = int(output_size / input_size)
+      logging.info("Comercials were found, the original file has been reduced by '{0}' ('{1}'%)".format(size_change, percent_change))
+      # logging.info('Comskip output file size looked sane, we\'ll replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
+      try:
+        comskip_output = os.path.join(temp_dir, video_basename)
+        compress_video(comskip_output) # Compress with FFMPEG.
+        cleanup_and_exit(temp_dir, SAVE_ALWAYS)
+      except Exception, e:
+        logging.error('Something went wrong during FFMPEG compression: %s' % e)
+        logging.info('Copying Comskip output file into place: %s -> %s' % (video_basename, original_video_dir))
+        shutil.copy(os.path.join(temp_dir, video_basename), original_video_dir)
+        cleanup_and_exit(temp_dir, SAVE_ALWAYS)
+    else:
+      logging.info('Comskip output file size looked wonky (too big or too small); we won\'t replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
+      cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
+  except Exception, e:
+    logging.error('Something went wrong during sanity check: %s' % e)
+    cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
+
 # If we're in a git repo, let's see if we can report our sha.
-logging.info('PlexComskip got invoked from %s' % os.path.realpath(__file__))
+logging.info('PlexScript got invoked from %s' % os.path.realpath(__file__))
 try:
   git_sha = subprocess.check_output('git rev-parse --short HEAD', shell=True)
   if git_sha:
@@ -102,7 +162,6 @@ try:
   logging.info('Using session ID: %s' % session_uuid)
   logging.info('Using temp dir: %s' % temp_dir)
   logging.info('Using input file: %s' % video_path)
-
 
   original_video_dir = os.path.dirname(video_path)
   video_basename = os.path.basename(video_path)
@@ -196,21 +255,28 @@ except Exception, e:
   logging.error('Something went wrong during concatenation: %s' % e)
   cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
 
-logging.info('Sanity checking our work...')
-try:
-  input_size = os.path.getsize(video_path)
-  output_size = os.path.getsize(os.path.join(temp_dir, video_basename))
-  if input_size and 1.01 > float(output_size) / float(input_size) > 0.99:
-    logging.info('Output file size was too similar (doesn\'t look like we did much); we won\'t replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
-    cleanup_and_exit(temp_dir, SAVE_ALWAYS)
-  elif input_size and 1.1 > float(output_size) / float(input_size) > 0.5:
-    logging.info('Output file size looked sane, we\'ll replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
-    logging.info('Copying the output file into place: %s -> %s' % (video_basename, original_video_dir))
-    shutil.copy(os.path.join(temp_dir, video_basename), original_video_dir)
-    cleanup_and_exit(temp_dir, SAVE_ALWAYS)
-  else:
-    logging.info('Output file size looked wonky (too big or too small); we won\'t replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
-    cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
-except Exception, e:
-  logging.error('Something went wrong during sanity check: %s' % e)
-  cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
+check_comskip_output()
+# logging.info('Sanity checking our work...')
+# try:
+#   input_size = os.path.getsize(video_path)
+#   output_size = os.path.getsize(os.path.join(temp_dir, video_basename))
+#   if input_size and 1.01 > float(output_size) / float(input_size) > 0.99:
+#     logging.info('Comskip output file size was too similar (doesn\'t look like we did much); we won\'t replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
+#     cleanup_and_exit(temp_dir, SAVE_ALWAYS)
+#   elif input_size and 1.1 > float(output_size) / float(input_size) > 0.5:
+#     logging.info('Comskip output file size looked sane, we\'ll replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
+#     try:
+#       comskip_output = os.path.join(temp_dir, video_basename)
+#       compress_video(comskip_output) # Compress with FFMPEG.
+#       cleanup_and_exit(temp_dir, SAVE_ALWAYS)
+#     except Exception, e:
+#       logging.error('Something went wrong during FFMPEG compression: %s' % e)
+#       logging.info('Copying Comskip output file into place: %s -> %s' % (video_basename, original_video_dir))
+#       shutil.copy(os.path.join(temp_dir, video_basename), original_video_dir)
+#       cleanup_and_exit(temp_dir, SAVE_ALWAYS)
+#   else:
+#     logging.info('Comskip output file size looked wonky (too big or too small); we won\'t replace the original: %s -> %s' % (sizeof_fmt(input_size), sizeof_fmt(output_size)))
+#     cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
+# except Exception, e:
+#   logging.error('Something went wrong during sanity check: %s' % e)
+#   cleanup_and_exit(temp_dir, SAVE_ALWAYS or SAVE_FORENSICS)
